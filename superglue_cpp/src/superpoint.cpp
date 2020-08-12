@@ -28,11 +28,18 @@ void SuperPoint::detect(const cv::Mat &image)
     auto start = std::chrono::steady_clock::now();
 #endif
     auto out = module->forward({img_tensor}).toTuple();
-  
+
 #ifdef DEBUG
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;
     std::cout << "elapsed time: " << elapsed_seconds.count() << "s\n";
 #endif
-    std::cout << std::get<0>(*out) << std::endl;
+    torch::Tensor temp = out->elements()[0].toTensor();
+
+    std::cout << temp.sizes() << std::endl;
+}
+
+torch::Tensor keyPoints(torch::Tensor &score)
+{
+    torch::Tensor keypoints;
 }

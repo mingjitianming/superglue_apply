@@ -13,7 +13,7 @@ public:
     void detect(const cv::Mat &image);
 
 private:
-    torch::Tensor keyPoints();
+    torch::Tensor keyPoints(torch::Tensor& score);
     std::shared_ptr<torch::jit::script::Module> module;
     torch::Device device = torch::Device(torch::kCPU);
 };
