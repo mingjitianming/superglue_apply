@@ -15,5 +15,5 @@ public:
 private:
     torch::Tensor keyPoints();
     std::shared_ptr<torch::jit::script::Module> module;
-    torch::Device device;
+    torch::Device device = torch::Device(torch::kCPU);
 };

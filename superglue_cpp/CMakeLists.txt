@@ -3,6 +3,11 @@ project(superglue)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+set(CMAKE_BUILD_TYPE "Debug")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_definitions(-DDEBUG)
+endif()
+
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-std=c++17" COMPILER_SUPPORTS_CXX17)
 check_cxx_compiler_flag("-std=c++14" COMPILER_SUPPORTS_CXX14)
@@ -15,6 +20,7 @@ elseif(COMPILER_SUPPORTS_CXX14)
 else()
     message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++14 support. Please use a different C++ compiler.")
 endif()
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 list(APPEND CMAKE_PREFIX_PATH ${PROJECT_SOURCE_DIR}/libtorch)
 
@@ -24,14 +30,22 @@ find_package(yaml-cpp REQUIRED)
 
 include_directories(include
                     ${TORCH_INCLUDE_DIRS}
-                    ${${OpenCV_INCLUDE_DIRS}})
+                    ${OpenCV_INCLUDE_DIRS}
+                    ${PROJECT_SOURCE_DIR}/3rd/spdlog/include)
 
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
+message("library out path:" ${PROJECT_BINARY_DIR}/lib)
 add_library(superpoint SHARED
     src/superpoint.cpp
 )
+# set_target_properties(superpoint PROPERTIES
+#                       OUTPUT_NAME superpoint
+#                       LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
 target_link_libraries(superpoint 
-                ${TORCH_INCLUDE_DIRS}
+                PUBLIC
+                ${TORCH_LIBRARIES}
                 ${OpenCV_LIBS}
                 yaml-cpp
                 )
+add_subdirectory(examples)

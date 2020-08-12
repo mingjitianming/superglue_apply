@@ -186,18 +186,21 @@ class SuperPoint(nn.Module):
 if __name__ == '__main__':
     net = SuperPoint(4, 256).eval().cuda()
     example = torch.randn([1, 1, 640, 80]).to('cuda')
-    script_net = torch.jit.script(net).eval().cuda()
+    # script_net = torch.jit.script(net).eval().cuda()
+    # script_net = torch.jit.script(net).eval().to('cuda')
     # print(script_net.cud
-    # script_net = torch.jit.trace(net, example).eval().cuda()
+    script_net = torch.jit.trace(net, example).eval().cuda()
 
     script_net.save(str(Path(__file__).parent/'model/SuperPoint.pt'))
     import time
-    a = time.time()
-    torch_out = net(example)
-    print(time.time() - a)
-    b = time.time()
-    script_out = script_net(example)
-    print(time.time() - b)
+    for _ in range(10):
+        a = time.time()
+        torch_out = net(example)
+        print(time.time() - a)
+    for i in range(10):
+        b = time.time()
+        script_out = script_net(example)
+        print(time.time() - b)
     # print(torch_out)
     # print(script_out)
     print(torch.equal(torch_out[0], script_out[0]))
