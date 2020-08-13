@@ -1,0 +1,6 @@
+#ifndef SUPERGLUE_CONFIG_H
+#define SUPERGLUE_CONFIG_H
+
+#define WORKSPACE_DIR "@WORKSPACE_DIR@/"
+
+#endif

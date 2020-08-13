@@ -3,11 +3,13 @@ project(superglue)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# set Debug modle
 set(CMAKE_BUILD_TYPE "Debug")
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_definitions(-DDEBUG)
 endif()
 
+#set c++ compiler
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-std=c++17" COMPILER_SUPPORTS_CXX17)
 check_cxx_compiler_flag("-std=c++14" COMPILER_SUPPORTS_CXX14)
@@ -21,6 +23,10 @@ else()
     message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++14 support. Please use a different C++ compiler.")
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# set workspace path
+set(WORKSPACE_DIR ${PROJECT_SOURCE_DIR})
+configure_file("${PROJECT_SOURCE_DIR}/include/config.h.in" "${PROJECT_SOURCE_DIR}/include/config.h")
 
 list(APPEND CMAKE_PREFIX_PATH ${PROJECT_SOURCE_DIR}/libtorch)
 
