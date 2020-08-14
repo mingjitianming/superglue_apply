@@ -10,17 +10,21 @@ class SuperPoint
 public:
     SuperPoint(const YAML::Node &config_node);
     ~SuperPoint();
-    void detect(const cv::Mat &image);
+    std::pair<std::vector<cv::KeyPoint>, cv::Mat> detect(const cv::Mat &image);
+    void computeDescriptors(const std::vector<cv::KeyPoint> &keypoints, cv::Mat &descriptors);
 
 private:
-    torch::Tensor keyPoints(torch::Tensor &&score);
-    std::pair<torch::Tensor, torch::Tensor>
-         removeBorders(torch::Tensor &keypoints, torch::Tensor &scores,
-                                                          int border, int height, int width);
+    auto calcKeyPoints(torch::Tensor &&score);
+    auto removeBorders(torch::Tensor &keypoints, torch::Tensor &scores,
+                       const int border, const int height, const int width);
+    auto calcDescriptors(torch::Tensor kpts, torch::Tensor &&descs);
 
 private:
     std::shared_ptr<torch::jit::script::Module> module_;
     torch::Device device_ = torch::Device(torch::kCPU);
     double keypoint_threshold_;
     int remove_borders_;
+    int max_keypoints_;
+    torch::Tensor scores_;
+    torch::Tensor descriptors_;
 };
