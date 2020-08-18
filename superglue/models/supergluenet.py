@@ -342,7 +342,7 @@ if __name__ == "__main__":
     output = superglue(data)
     # script_superglue = torch.jit.trace(superglue, data)
     script_superglue = torch.jit.script(superglue).cuda()
-    script_superglue.save(str(Path(__file__).parent/"model/script_superglue.pt"))
+    script_superglue.save(str(Path(__file__).parent/"model/superglue.pt"))
 
     output = superglue(data)
     script_out = script_superglue(data)
