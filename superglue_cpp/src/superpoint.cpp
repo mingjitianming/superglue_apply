@@ -16,13 +16,9 @@ SuperPoint::SuperPoint(const YAML::Node &config_node) : keypoint_threshold_(conf
         spdlog::warn("CUDA is not available!");
     }
 
-    module_ = std::make_shared<torch::jit::script::Module>(torch::jit::load("/home/zmy/project_ws/superglue_apply/superglue/models/model/SuperPoint.pt", device_));
+    module_ = std::make_shared<torch::jit::script::Module>(torch::jit::load(workspace + "../superglue/models/model/SuperPoint.pt", device_));
     assert(module_ != nullptr);
-    spdlog::info("Load model successful!");
-}
-
-SuperPoint::~SuperPoint()
-{
+    spdlog::info("Load superpoint model successful!");
 }
 
 auto SuperPoint::removeBorders(torch::Tensor &keypoints, torch::Tensor &scores, const int border, const int height, const int width)
@@ -98,14 +94,14 @@ std::pair<std::vector<cv::KeyPoint>, cv::Mat> SuperPoint::detect(const cv::Mat &
     std::cout << "elapsed time: " << elapsed_seconds.count() << "s\n";
 #endif
     auto [keypoints, scores] = calcKeyPoints(std::move(out->elements()[0].toTensor()));
+    // std::cout << scores.sizes() << std::endl;
     auto descriptors = calcDescriptors(keypoints, std::move(out->elements()[1].toTensor()));
     std::vector<cv::KeyPoint> kpts(keypoints.size(0));
     for (auto i = 0; i < keypoints.size(0); ++i)
     {
-        auto response = scores[i];
         kpts.emplace_back(keypoints[i][0].item().toFloat(), keypoints[i][1].item().toFloat(), 8, -1, scores[i].item().toFloat());
     }
-    cv::Mat desc_mat(cv::Size(descriptors.size(1), descriptors.size(0)), CV_32FC1, descriptors.data<float>());
+    cv::Mat desc_mat(cv::Size(descriptors.size(1), descriptors.size(0)), CV_32FC1, descriptors.data_ptr<float>());
 
     return std::make_pair(kpts, desc_mat);
 }
@@ -120,5 +116,5 @@ void SuperPoint::computeDescriptors(const std::vector<cv::KeyPoint> &keypoints, 
         kpt_mat.at<float>(i, 0) = (float)keypoints[i].pt.y;
         kpt_mat.at<float>(i, 1) = (float)keypoints[i].pt.x;
     }
-    auto fkpts = torch::from_blob(kpt_mat.data, {keypoints.size(), 2}, torch::kFloat);
+    auto fkpts = torch::from_blob(kpt_mat.data, {static_cast<long>(keypoints.size()), 2}, torch::kFloat);
 }
