@@ -1,2 +1,3 @@
 image_rows: 480
 image_cols: 640
+weight: "indoor"       #indoor,outdoor
