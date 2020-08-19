@@ -46,8 +46,6 @@ import torch
 from torch import nn
 from typing import Tuple, Dict, List, Optional
 
-# @torch.jit.script
-
 
 def MLP(channels: list, do_bn=True):
     """ Multi-layer perceptron """
@@ -248,6 +246,10 @@ class SuperGlue(nn.Module):
         """Run SuperGlue on a pair of keypoints and descriptors"""
         desc0, desc1 = data['descriptors0'], data['descriptors1']
         kpts0, kpts1 = data['keypoints0'], data['keypoints1']
+        # print('...............')
+        # print(desc0.shape)
+        # print(kpts0.shape)
+        # print(data['scores0'].shape)
 
         # if kpts0.shape[1] == 0 or kpts1.shape[1] == 0:  # no keypoints
         #     shape0, shape1 = kpts0.shape[:-1], kpts1.shape[:-1]
@@ -312,23 +314,24 @@ class SuperGlue(nn.Module):
 
 
 if __name__ == "__main__":
-    config = {'superglue': {
+    config = {
         'weights': "indoor",
         'sinkhorn_iterations': 20,
         'match_threshold': 0.2,
-    }}
+    }
     superglue = SuperGlue(config).eval().cuda()
 
     keypoints0 = torch.randn(418, 2).cuda()
     keypoints1 = torch.randn(418, 2).cuda()
-    descriptors0 = torch.randn(256, 418).cuda()
-    descriptors1 = torch.randn(256, 418).cuda()
+    descriptors0 = torch.randn(1, 256, 418).cuda()
+    descriptors1 = torch.randn(1, 256, 418).cuda()
     image0 = torch.randn(1, 1, 480, 640).cuda()
     image1 = torch.randn(1, 1, 480, 640).cuda()
     scores0 = torch.randn(1, 418).cuda()
     scores1 = torch.randn(1, 418).cuda()
     keypoints0 = normalize_keypoints(keypoints0, image0.shape).cuda()
     keypoints1 = normalize_keypoints(keypoints1, image1.shape).cuda()
+    print(keypoints0.shape)
     data = {
         'keypoints0': keypoints0,
         'keypoints1': keypoints1,
@@ -342,7 +345,13 @@ if __name__ == "__main__":
     output = superglue(data)
     # script_superglue = torch.jit.trace(superglue, data)
     script_superglue = torch.jit.script(superglue).cuda()
-    script_superglue.save(str(Path(__file__).parent/"model/superglue.pt"))
+    # script_superglue.save(
+    #     str(Path(__file__).parent/"model/SuperGlue_indoor.pt"))
+    # script_superglue.save(
+    #     str(Path(__file__).parent/"model/SuperGlue_outdoor.pt"))
+    script_superglue.save(
+        str(Path(__file__).parent/"model/SuperGlue_{}.pt".format(config['weights'])))
+    # path = path / 'weights/superglue_{}.pth'.format(self.config['weights'])
 
     output = superglue(data)
     script_out = script_superglue(data)
