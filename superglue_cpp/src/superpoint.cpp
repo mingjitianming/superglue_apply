@@ -16,7 +16,11 @@ SuperPoint::SuperPoint(const YAML::Node &config_node) : keypoint_threshold_(conf
         spdlog::warn("CUDA is not available!");
     }
 
-    module_ = std::make_shared<torch::jit::script::Module>(torch::jit::load(workspace + "../superglue/models/model/SuperPoint.pt", device_));
+    module_ = std::make_shared<torch::jit::script::Module>(
+        torch::jit::load(workspace +
+                             "../superglue/models/model/SuperPoint.pt",
+                         device_));
+
     assert(module_ != nullptr);
     spdlog::info("Load superpoint model successful!");
 }
@@ -51,6 +55,7 @@ auto SuperPoint::calcKeyPoints(torch::Tensor &&score)
     // }
 
     auto [keypoints, scores] = removeBorders(keypts, keypts_score, remove_borders_, score[0].size(0), score[0].size(1));
+    // std::cout << keypoints.sizes() << std::endl;
     if (max_keypoints_ > 0 && keypoints.size(0) > max_keypoints_)
     {
         auto [ss, indices] = torch::topk(scores, max_keypoints_, 0);
@@ -65,6 +70,7 @@ auto SuperPoint::calcDescriptors(torch::Tensor kpts, torch::Tensor &&descs)
 {
     int s = 8;
     int b = descs.size(0);
+    int c = descs.size(1);
     int h = descs.size(2);
     int w = descs.size(3);
 
@@ -74,8 +80,9 @@ auto SuperPoint::calcDescriptors(torch::Tensor kpts, torch::Tensor &&descs)
     auto descriptors = torch::nn::functional::grid_sample(
         descs, kpts.view({b, 1, -1, 2}),
         torch::nn::functional::GridSampleFuncOptions().mode(torch::kBilinear).padding_mode(torch::kZeros).align_corners(true));
-
-    return descriptors;
+    descriptors = torch::nn::functional::normalize(
+        descriptors.reshape({b, c, -1}), torch::nn::functional::NormalizeFuncOptions().p(2).dim(1));
+    return descriptors.squeeze_(0);
 }
 
 std::pair<std::vector<cv::KeyPoint>, cv::Mat> SuperPoint::detect(const cv::Mat &image)
@@ -91,18 +98,21 @@ std::pair<std::vector<cv::KeyPoint>, cv::Mat> SuperPoint::detect(const cv::Mat &
 #ifdef DEBUG
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;
-    std::cout << "elapsed time: " << elapsed_seconds.count() << "s\n";
+    std::cout << "superpoint module elapsed time: " << elapsed_seconds.count() << "s\n";
 #endif
     auto [keypoints, scores] = calcKeyPoints(std::move(out->elements()[0].toTensor()));
     // std::cout << scores.sizes() << std::endl;
     auto descriptors = calcDescriptors(keypoints, std::move(out->elements()[1].toTensor()));
-    std::vector<cv::KeyPoint> kpts(keypoints.size(0));
+    std::vector<cv::KeyPoint> kpts;
+    kpts.reserve(keypoints.size(0));
     for (auto i = 0; i < keypoints.size(0); ++i)
     {
         kpts.emplace_back(keypoints[i][0].item().toFloat(), keypoints[i][1].item().toFloat(), 8, -1, scores[i].item().toFloat());
     }
-    cv::Mat desc_mat(cv::Size(descriptors.size(1), descriptors.size(0)), CV_32FC1, descriptors.data_ptr<float>());
-
+    // XXX: desc_mat  [num_keypoints x 256]
+    cv::Mat desc_mat(cv::Size(descriptors.size(0), descriptors.size(1)), CV_32FC1, descriptors.data_ptr<float>());
+    // std::cout << descriptors.sizes() << std::endl;
+    // std::cout << desc_mat.rows << " " << desc_mat.cols << std::endl;
     return std::make_pair(kpts, desc_mat);
 }
 
