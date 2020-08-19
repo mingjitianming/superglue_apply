@@ -30,6 +30,7 @@ private:
     torch::Device device_ = torch::Device(torch::kCPU);
     int image_rows_;
     int image_cols_;
+    std::string weight_;
 };
 
 #endif
