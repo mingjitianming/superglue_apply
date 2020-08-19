@@ -11,13 +11,16 @@ int main()
     SuperPoint sp = SuperPoint(sp_node);
     cv::Mat img0 = cv::imread(workspace + "test/data/equirectangular_image_001.jpg", cv::IMREAD_GRAYSCALE);
     cv::Mat img1 = cv::imread(workspace + "test/data/equirectangular_image_002.jpg", cv::IMREAD_GRAYSCALE);
-    // cv::resize(img0, img0, cv::Size(640, 480), 0, 0);
-    // cv::resize(img1, img1, cv::Size(640, 480), 0, 0);
+    cv::resize(img0, img0, cv::Size(640, 480), 0, 0);
+    cv::resize(img1, img1, cv::Size(640, 480), 0, 0);
     auto [kpts0, desc0] = sp.detect(img0);
     auto [kpts1, desc1] = sp.detect(img1);
-
     SuperGlue sg = SuperGlue(sg_node);
-    sg.match(kpts0, kpts1, desc0, desc1);
+    for (int i = 0; i < 10; ++i)
+    {
+        sg.match(kpts0, kpts1, desc0, desc1);
+    }
+    // sg.match(kpts0, kpts1, desc0, desc1);
 
     for (const auto &point : kpts0)
     {
