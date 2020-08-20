@@ -167,7 +167,8 @@ def log_sinkhorn_iterations(Z, log_mu, log_nu, iters: int):
 def log_optimal_transport(scores, alpha, iters: int):
     """ Perform Differentiable Optimal Transport in Log-space for stability"""
     b, m, n = scores.shape
-    one = scores.new_tensor(1)
+    # one = scores.new_tensor(1)
+    one = torch.ones(1).to(scores).squeeze()
     ms, ns = (m*one).to(scores), (n*one).to(scores)
 
     bins0 = alpha.expand(b, m, 1)
@@ -273,8 +274,17 @@ class SuperGlue(nn.Module):
 
         # Final MLP projection. 公式(6)
         mdesc0, mdesc1 = self.final_proj(desc0), self.final_proj(desc1)
-
-        return mdesc0, mdesc1
+        scores = torch.einsum('bdn,bdm->bnm', mdesc0, mdesc1)
+        scores = scores / 256**.5
+        # Run the optimal transport.
+        # scores = log_optimal_transport(
+        #     scores, self.bin_score,
+        #     iters=self.config['sinkhorn_iterations'])
+        # scores = log_optimal_transport(
+        #     scores, self.bin_score,
+        #     iters=20)
+        return scores, self.bin_score
+        # return mdesc0, mdesc1
 
 ########################################################################
         # Compute matching descriptor distance.  公式(7)
