@@ -3,7 +3,9 @@
 
 SuperGlue::SuperGlue(const YAML::Node &glue_config) : image_rows_(glue_config["image_rows"].as<int>()),
                                                       image_cols_(glue_config["image_cols"].as<int>()),
+                                                      sinkhorn_iterations_(glue_config["sinkhorn_iterations"].as<int>()),
                                                       weight_(glue_config["weight"].as<std::string>())
+
 {
     if (torch::cuda::is_available())
     {
@@ -36,6 +38,50 @@ SuperGlue::SuperGlue(const YAML::Node &glue_config) : image_rows_(glue_config["i
     }
     assert(module_ != nullptr);
     spdlog::info("Load model successful!");
+}
+
+auto SuperGlue::logSinkhornIterations(torch::Tensor &Z, torch::Tensor &log_mu, torch::Tensor &log_nu, const int iters)
+{
+    auto u = torch::zeros_like(log_mu);
+    auto v = torch::zeros_like(log_nu);
+    for (auto i = 0; i < iters; ++i)
+    {
+        u = log_mu - torch::logsumexp(Z + v.unsqueeze(1), 2);
+        v = log_nu - torch::logsumexp(Z + u.unsqueeze(2), 1);
+    }
+    return Z + u.unsqueeze(2) + v.unsqueeze(1);
+}
+
+auto SuperGlue::logOptimalTransport(const torch::Tensor &&scores, torch::Tensor &&alpha, const int iters)
+{
+    int b = scores.size(0);
+    int m = scores.size(1);
+    int n = scores.size(2);
+    auto one = torch::ones(1).squeeze();
+    auto ms = (m * one).to(scores);
+    auto ns = (n * one).to(scores);
+
+    auto bins0 = alpha.expand({b, m, 1});
+    auto bins1 = alpha.expand({b, 1, n});
+    alpha = alpha.expand({b, 1, 1});
+    auto couplings = torch::cat({torch::cat({scores, bins0}, -1),
+                                 torch::cat({bins1, alpha}, -1)},
+                                1);
+    auto norm = -(ms + ns).log();
+    auto log_mu = torch::cat({norm.expand(m), ns.log().unsqueeze_(0) + norm});
+    auto log_nu = torch::cat({norm.expand(n), ms.log().unsqueeze_(0) + norm});
+    log_mu = log_mu.unsqueeze(0).expand({b, -1});
+    log_nu = log_nu.unsqueeze(0).expand({b, -1});
+    auto Z = logSinkhornIterations(couplings, log_mu, log_nu, iters);
+    Z = Z - norm;
+    return Z;
+}
+
+auto SuperGlue::arangeLike(const torch::Tensor &x, const int dim)
+{
+    auto a = torch::arange(x.size(dim));
+    std::cout << a << std::endl;
+    return a;
 }
 
 void SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kpts1, cv::Mat &desc0, cv::Mat &desc1)
@@ -93,12 +139,23 @@ void SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint
 #ifdef DEBUG
     auto start = std::chrono::steady_clock::now();
 #endif
-    auto out = module_->forward({data});
+    auto out = module_->forward({data}).toTuple();
+
+    auto scores = logOptimalTransport(out->elements()[0].toTensor(), out->elements()[1].toTensor(), sinkhorn_iterations_);
 #ifdef DEBUG
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;
     std::cout << "SuperpGlue module elapsed time: " << elapsed_seconds.count() << "s\n";
 #endif
+    auto [indices0, values0] = scores.slice(1, 0, scores[0].size(0) - 1).slice(2, 0, scores[0].size(1) - 1).max(2);
+    auto [indices1, values1] = scores.slice(1, 0, scores[0].size(0) - 1).slice(2, 0, scores[0].size(1) - 1).max(1);
+    std::cout << indices1 << std::endl;
+    auto aa = indices0.gather(1, indices1);
+    std::cout << aa.sizes() << std::endl;
+    // auto mutual0 = torch::arange(indices0.size(1)).unsqueeze(0) == indices0.gather(1, indices0);
+    // auto mutual1 = torch::arange(indices1.size(1)).unsqueeze(0) == indices1.gather(1, indices1);
+    auto zero = torch::zeros(1);
+    std::cout << zero.sizes() << std::endl;
 }
 
 torch::Tensor SuperGlue::normalizeKeypoints(torch::Tensor &kpts)

@@ -1,3 +1,4 @@
 image_rows: 480
 image_cols: 640
 weight: "indoor"       #indoor,outdoor
+sinkhorn_iterations: 10  #20

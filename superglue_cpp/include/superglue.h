@@ -24,12 +24,34 @@ private:
      */
     torch::Tensor normalizeKeypoints(torch::Tensor &kpts);
 
+    /**
+     * @brief """ Perform Sinkhorn Normalization in Log-space for stability"""
+     * 
+     * @param Z 
+     * @param log_mu 
+     * @param log_nu 
+     * @param iters 
+     * @return torch::Tensor
+     */
+    auto logSinkhornIterations(torch::Tensor &Z, torch::Tensor &log_mu, torch::Tensor &log_nu, const int iters);
+    /**
+     * @brief """ Perform Differentiable Optimal Transport in Log-space for stability"""
+     * 
+     * @param scores 
+     * @param alpha 
+     * @param iters 
+     * @return torch::Tensor 
+     */
+    auto logOptimalTransport(const torch::Tensor &&scores, torch::Tensor &&alpha, const int iters);
+    auto arangeLike(const torch::Tensor& x,const int dim);
+
 private:
     std::shared_ptr<torch::jit::script::Module>
         module_;
     torch::Device device_ = torch::Device(torch::kCPU);
     int image_rows_;
     int image_cols_;
+    int sinkhorn_iterations_;
     std::string weight_;
 };
 
