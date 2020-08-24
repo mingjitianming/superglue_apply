@@ -1,4 +1,5 @@
-image_rows: 480
-image_cols: 640
+image_width: 640 
+image_height: 480 
 weight: "indoor"       #indoor,outdoor
-sinkhorn_iterations: 10  #20
+sinkhorn_iterations: 20  #20
+match_threshold: 0.2

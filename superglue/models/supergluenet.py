@@ -223,6 +223,8 @@ class SuperGlue(nn.Module):
         super().__init__()
         self.config = {**self.default_config, **config}
 
+        self.descriptor_dim = self.config['descriptor_dim']
+
         self.kenc = KeypointEncoder(
             self.config['descriptor_dim'], self.config['keypoint_encoder'])
 
@@ -275,7 +277,8 @@ class SuperGlue(nn.Module):
         # Final MLP projection. 公式(6)
         mdesc0, mdesc1 = self.final_proj(desc0), self.final_proj(desc1)
         scores = torch.einsum('bdn,bdm->bnm', mdesc0, mdesc1)
-        scores = scores / 256**.5
+        # scores = scores / 256**.5
+        scores = scores / self.descriptor_dim**.5
         # Run the optimal transport.
         # scores = log_optimal_transport(
         #     scores, self.bin_score,
@@ -283,6 +286,7 @@ class SuperGlue(nn.Module):
         # scores = log_optimal_transport(
         #     scores, self.bin_score,
         #     iters=20)
+        # print(scores)
         return scores, self.bin_score
         # return mdesc0, mdesc1
 

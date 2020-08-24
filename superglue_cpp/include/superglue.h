@@ -13,7 +13,8 @@ class SuperGlue
 public:
     SuperGlue(const YAML::Node &glue_config);
     ~SuperGlue() = default;
-    void match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kpts1, cv::Mat &desc0, cv::Mat &desc1);
+    std::tuple<std::vector<int>, std::vector<float>, std::vector<int>, std::vector<float>>
+    match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kpts1, cv::Mat &desc0, cv::Mat &desc1);
 
 private:
     /**
@@ -43,15 +44,16 @@ private:
      * @return torch::Tensor 
      */
     auto logOptimalTransport(const torch::Tensor &&scores, torch::Tensor &&alpha, const int iters);
-    auto arangeLike(const torch::Tensor& x,const int dim);
+    auto arangeLike(const torch::Tensor &x, const int dim);
 
 private:
     std::shared_ptr<torch::jit::script::Module>
         module_;
     torch::Device device_ = torch::Device(torch::kCPU);
-    int image_rows_;
-    int image_cols_;
+    int image_width_;
+    int image_height_;
     int sinkhorn_iterations_;
+    float match_threshold_;
     std::string weight_;
 };
 

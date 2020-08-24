@@ -18,19 +18,28 @@ int main()
     SuperGlue sg = SuperGlue(sg_node);
     for (int i = 0; i < 10; ++i)
     {
-        sg.match(kpts0, kpts1, desc0, desc1);
-    }
-    // sg.match(kpts0, kpts1, desc0, desc1);
+        auto [indice0, scores0, indice1, scores1] = sg.match(kpts0, kpts1, desc0, desc1);
 
-    for (const auto &point : kpts0)
-    {
-        cv::circle(img0, point.pt, 2, (255, 255, 255));
-    }
-    for (const auto &point : kpts1)
-    {
-        cv::circle(img0, point.pt, 2, (255, 255, 255));
-    }
+        for (const auto &point : kpts0)
+        {
+            cv::circle(img0, point.pt, 2, (255, 255, 255));
+        }
+        for (const auto &point : kpts1)
+        {
+            cv::circle(img1, point.pt, 2, (255, 255, 255));
+        }
 
-    cv::imshow("superpoint", img0);
-    cv::waitKey();
+        cv::Mat cat;
+        cv::hconcat(img0, img1, cat);
+        for (int i = 0; i < kpts0.size(); ++i)
+        {
+            auto kk = cv::Point(kpts1[indice0[i]].pt.x + img0.cols, kpts1[indice0[i]].pt.x);
+            cv::line(cat, kpts0[i].pt, cv::Point(kpts1[indice0[i]].pt.x + img0.cols, kpts1[indice0[i]].pt.x), (255, 255, 255));
+        }
+
+        cv::imshow("superpoint", cat);
+        cv::waitKey();
+    }
+    std::cout << "finished!" << std::endl;
+    return 0;
 }

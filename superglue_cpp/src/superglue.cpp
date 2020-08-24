@@ -1,9 +1,10 @@
 #include "superglue.h"
 #include "spdlog/spdlog.h"
 
-SuperGlue::SuperGlue(const YAML::Node &glue_config) : image_rows_(glue_config["image_rows"].as<int>()),
-                                                      image_cols_(glue_config["image_cols"].as<int>()),
+SuperGlue::SuperGlue(const YAML::Node &glue_config) : image_width_(glue_config["image_width"].as<int>()),
+                                                      image_height_(glue_config["image_height"].as<int>()),
                                                       sinkhorn_iterations_(glue_config["sinkhorn_iterations"].as<int>()),
+                                                      match_threshold_(glue_config["match_threshold"].as<float>()),
                                                       weight_(glue_config["weight"].as<std::string>())
 
 {
@@ -49,6 +50,8 @@ auto SuperGlue::logSinkhornIterations(torch::Tensor &Z, torch::Tensor &log_mu, t
         u = log_mu - torch::logsumexp(Z + v.unsqueeze(1), 2);
         v = log_nu - torch::logsumexp(Z + u.unsqueeze(2), 1);
     }
+    // std::cout << u << std::endl;
+    // std::cout << v << std::endl;
     return Z + u.unsqueeze(2) + v.unsqueeze(1);
 }
 
@@ -63,6 +66,7 @@ auto SuperGlue::logOptimalTransport(const torch::Tensor &&scores, torch::Tensor 
 
     auto bins0 = alpha.expand({b, m, 1});
     auto bins1 = alpha.expand({b, 1, n});
+    // std::cout << scores << std::endl;
     alpha = alpha.expand({b, 1, 1});
     auto couplings = torch::cat({torch::cat({scores, bins0}, -1),
                                  torch::cat({bins1, alpha}, -1)},
@@ -72,6 +76,7 @@ auto SuperGlue::logOptimalTransport(const torch::Tensor &&scores, torch::Tensor 
     auto log_nu = torch::cat({norm.expand(n), ms.log().unsqueeze_(0) + norm});
     log_mu = log_mu.unsqueeze(0).expand({b, -1});
     log_nu = log_nu.unsqueeze(0).expand({b, -1});
+    // std::cout << couplings << std::endl;
     auto Z = logSinkhornIterations(couplings, log_mu, log_nu, iters);
     Z = Z - norm;
     return Z;
@@ -80,11 +85,11 @@ auto SuperGlue::logOptimalTransport(const torch::Tensor &&scores, torch::Tensor 
 auto SuperGlue::arangeLike(const torch::Tensor &x, const int dim)
 {
     auto a = torch::arange(x.size(dim));
-    std::cout << a << std::endl;
     return a;
 }
 
-void SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kpts1, cv::Mat &desc0, cv::Mat &desc1)
+std::tuple<std::vector<int>, std::vector<float>, std::vector<int>, std::vector<float>>
+SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kpts1, cv::Mat &desc0, cv::Mat &desc1)
 {
     cv::Mat kpts_mat0(kpts0.size(), 2, CV_32F); // [n_keypoints, 2]  (y, x)
     cv::Mat kpts_mat1(kpts1.size(), 2, CV_32F); // [n_keypoints, 2]  (y, x)
@@ -116,18 +121,19 @@ void SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint
     auto scores1_tensor = torch::from_blob(scores_mat1.data, {1, static_cast<long>(kpts1.size())}, torch::kFloat).to(device_);
     auto descriptors0 = torch::from_blob(desc0.data, {1, desc0.cols, desc0.rows}, torch::kFloat).to(device_);
     auto descriptors1 = torch::from_blob(desc1.data, {1, desc1.cols, desc1.rows}, torch::kFloat).to(device_);
-#ifdef DEBUG
-    std::cout << "kpts0_tensor:" << kpts0_tensor.sizes() << std::endl;
-    std::cout << "kpts1_tensor:" << kpts1_tensor.sizes() << std::endl;
-    std::cout << "scores0_tensor:" << scores0_tensor.sizes() << std::endl;
-    std::cout << "scores1_tensor:" << scores1_tensor.sizes() << std::endl;
-    std::cout << "descriptors0:" << descriptors0.sizes() << std::endl;
-    std::cout << "descriptors1:" << descriptors1.sizes() << std::endl;
-#endif
     auto kpts0_t = normalizeKeypoints(kpts0_tensor);
     auto kpts1_t = normalizeKeypoints(kpts1_tensor);
-    std::cout << "kpts0_t:" << kpts0_t.sizes() << std::endl;
-    std::cout << "kpts1_t:" << kpts1_t.sizes() << std::endl;
+    // #ifdef DEBUG
+    //     std::cout << "kpts0_tensor:" << kpts0_tensor.sizes() << std::endl;
+    //     std::cout << "kpts1_tensor:" << kpts1_tensor.sizes() << std::endl;
+    //     std::cout << "scores0_tensor:" << scores0_tensor.sizes() << std::endl;
+    //     std::cout << "scores1_tensor:" << scores1_tensor.sizes() << std::endl;
+    //     std::cout << "descriptors0:" << descriptors0.sizes() << std::endl;
+    //     std::cout << "descriptors1:" << descriptors1.sizes() << std::endl;
+
+    //     std::cout << "kpts0_t:" << kpts0_t.sizes() << std::endl;
+    //     std::cout << "kpts1_t:" << kpts1_t.sizes() << std::endl;
+    // #endif
 
     torch::Dict<std::string, torch::Tensor> data;
     data.insert("keypoints0", kpts0_t);
@@ -140,28 +146,59 @@ void SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint
     auto start = std::chrono::steady_clock::now();
 #endif
     auto out = module_->forward({data}).toTuple();
-
     auto scores = logOptimalTransport(out->elements()[0].toTensor(), out->elements()[1].toTensor(), sinkhorn_iterations_);
+    // auto scores = out->elements()[0].toTensor();
 #ifdef DEBUG
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;
     std::cout << "SuperpGlue module elapsed time: " << elapsed_seconds.count() << "s\n";
 #endif
-    auto [indices0, values0] = scores.slice(1, 0, scores[0].size(0) - 1).slice(2, 0, scores[0].size(1) - 1).max(2);
-    auto [indices1, values1] = scores.slice(1, 0, scores[0].size(0) - 1).slice(2, 0, scores[0].size(1) - 1).max(1);
-    std::cout << indices1 << std::endl;
-    auto aa = indices0.gather(1, indices1);
-    std::cout << aa.sizes() << std::endl;
-    // auto mutual0 = torch::arange(indices0.size(1)).unsqueeze(0) == indices0.gather(1, indices0);
-    // auto mutual1 = torch::arange(indices1.size(1)).unsqueeze(0) == indices1.gather(1, indices1);
-    auto zero = torch::zeros(1);
-    std::cout << zero.sizes() << std::endl;
+    auto [values0, indices0] = scores.slice(1, 0, scores[0].size(0) - 1).slice(2, 0, scores[0].size(1) - 1).max(2);
+    auto [values1, indices1] = scores.slice(1, 0, scores[0].size(0) - 1).slice(2, 0, scores[0].size(1) - 1).max(1);
+
+    auto mutual0 = torch::arange(indices0.size(1)).unsqueeze(0).to(device_) == indices1.gather(1, indices0);
+    auto mutual1 = torch::arange(indices1.size(1)).unsqueeze(0).to(device_) == indices0.gather(1, indices1);
+    auto zero = torch::zeros(1).squeeze().to(device_);
+    auto mscores0 = torch::where(mutual0, values0.exp(), zero);
+    auto mscores1 = torch::where(mutual1, mscores0.gather(1, indices1), zero);
+    auto valid0 = mutual0 & (mscores0 > match_threshold_);
+    auto valid1 = mutual1 & valid0.gather(1, indices1);
+
+    indices0 = torch::where(valid0, indices0, torch::full_like(indices0, -1, torch::kInt64).to(device_));
+    indices1 = torch::where(valid1, indices1, torch::full_like(indices1, -1, torch::kInt64).to(device_));
+
+    // std::cout << indices0.sizes() << std::endl;
+    // std::cout << mscores0.sizes() << std::endl;
+    // std::cout << indices1.sizes() << std::endl;
+    // std::cout << mscores1.sizes() << std::endl;
+
+    std::vector<int> key_indices0;
+    std::vector<float> point_scores0;
+    std::vector<int> key_indices1;
+    std::vector<float> point_scores1;
+    key_indices0.reserve(indices0.size(1));
+    key_indices0.reserve(indices1.size(1));
+    point_scores0.reserve(mscores0.size(1));
+    point_scores1.reserve(mscores1.size(1));
+
+    for (int i = 0; i < indices0.size(1); ++i)
+    {
+        key_indices0.emplace_back(indices0[0][i].item().toInt());
+        point_scores0.emplace_back(mscores0[0][i].item().toFloat());
+    }
+
+    for (int i = 0; i < indices1.size(1); ++i)
+    {
+        key_indices1.emplace_back(indices1[0][i].item().toInt());
+        point_scores1.emplace_back(mscores1[0][i].item().toFloat());
+    }
+    return std::make_tuple(key_indices0, point_scores0, key_indices1, point_scores1);
 }
 
 torch::Tensor SuperGlue::normalizeKeypoints(torch::Tensor &kpts)
 {
     auto one = torch::ones(1).to(kpts);
-    auto size = torch::stack({one * image_cols_, one * image_rows_}, 1);
+    auto size = torch::stack({one * image_height_, one * image_width_}, 1);
     auto center = size / 2;
     auto scaling = std::get<1>(size.max(1, true)) * 1.7;
     // #ifdef DEBUG
