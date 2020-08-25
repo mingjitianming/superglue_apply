@@ -102,7 +102,7 @@ std::pair<std::vector<cv::KeyPoint>, cv::Mat> SuperPoint::detect(const cv::Mat &
 #endif
     auto [keypoints, scores] = calcKeyPoints(std::move(out->elements()[0].toTensor()));
     // std::cout << scores.sizes() << std::endl;
-    auto descriptors = calcDescriptors(keypoints, std::move(out->elements()[1].toTensor()));
+    auto descriptors = calcDescriptors(keypoints, std::move(out->elements()[1].toTensor())).to(torch::kCPU);
     // std::cout << descriptors << std::endl;
     // std::cout << descriptors.sizes() << std::endl;
     std::vector<cv::KeyPoint> kpts;
@@ -113,7 +113,9 @@ std::pair<std::vector<cv::KeyPoint>, cv::Mat> SuperPoint::detect(const cv::Mat &
     }
     // XXX: desc_mat  [num_keypoints x 256]
     cv::Mat desc_mat(cv::Size(descriptors.size(0), descriptors.size(1)), CV_32FC1, descriptors.data_ptr<float>());
-    return std::make_pair(kpts, desc_mat);
+    std::cout << "desc:"<<desc_mat.at<float>(0, 0) << std::endl;
+    // std::cout << desc_mat << std::endl;
+    return std::make_pair(kpts, desc_mat.clone());
 }
 
 // TODO:外部调用
