@@ -76,8 +76,8 @@ class KeypointEncoder(nn.Module):
 
     def __init__(self, feature_dim, layers):
         super().__init__()
-        self.encoder = torch.jit.script(MLP([3] + layers + [feature_dim]))
-        # self.encoder = MLP([3] + layers + [feature_dim])
+        # self.encoder = torch.jit.script(MLP([3] + layers + [feature_dim]))
+        self.encoder = MLP([3] + layers + [feature_dim])
         nn.init.constant_(self.encoder[-1].bias, 0.0)
 
     def forward(self, kpts, scores):  # scores.shape [1,kpt_num]
@@ -228,8 +228,8 @@ class SuperGlue(nn.Module):
         self.kenc = KeypointEncoder(
             self.config['descriptor_dim'], self.config['keypoint_encoder'])
 
-        self.gnn = torch.jit.script(AttentionalGNN(
-            self.config['descriptor_dim'], self.config['GNN_layers']))
+        self.gnn = AttentionalGNN(
+            self.config['descriptor_dim'], self.config['GNN_layers'])
 
         self.final_proj = nn.Conv1d(
             self.config['descriptor_dim'], self.config['descriptor_dim'],
@@ -356,18 +356,15 @@ if __name__ == "__main__":
         'descriptors0': descriptors0,
         'descriptors1': descriptors1
     }
-    output = superglue(data)
-    # script_superglue = torch.jit.trace(superglue, data)
+ 
     script_superglue = torch.jit.script(superglue).cuda()
-    # script_superglue.save(
-    #     str(Path(__file__).parent/"model/SuperGlue_indoor.pt"))
-    # script_superglue.save(
-    #     str(Path(__file__).parent/"model/SuperGlue_outdoor.pt"))
+
     script_superglue.save(
         str(Path(__file__).parent/"model/SuperGlue_{}.pt".format(config['weights'])))
-    # path = path / 'weights/superglue_{}.pth'.format(self.config['weights'])
+
 
     output = superglue(data)
+    print(output[0][0][0][0])
     script_out = script_superglue(data)
 
     print(torch.equal(output[0], script_out[0]))
