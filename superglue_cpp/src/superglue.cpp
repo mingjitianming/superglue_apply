@@ -95,14 +95,14 @@ SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kp
     cv::Mat kpts_mat1(kpts1.size(), 2, CV_32F); // [n_keypoints, 2]  (y, x)
     cv::Mat scores_mat0(kpts0.size(), 1, CV_32F);
     cv::Mat scores_mat1(kpts1.size(), 1, CV_32F);
-
+    // std::cout << desc0.at<float>(0, 0) << std::endl;
 #ifdef USE_OPENMP
 #pragma omp parallel for
 #endif
     for (size_t i = 0; i < kpts0.size(); ++i)
     {
-        kpts_mat0.at<float>(i, 0) = static_cast<float>(kpts0[i].pt.y);
-        kpts_mat0.at<float>(i, 1) = static_cast<float>(kpts0[i].pt.x);
+        kpts_mat0.at<float>(i, 0) = static_cast<float>(kpts0[i].pt.x);
+        kpts_mat0.at<float>(i, 1) = static_cast<float>(kpts0[i].pt.y);
         scores_mat0.at<float>(i) = static_cast<float>(kpts0[i].response);
     }
 #ifdef USE_OPENMP
@@ -110,8 +110,8 @@ SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kp
 #endif
     for (size_t i = 0; i < kpts1.size(); ++i)
     {
-        kpts_mat1.at<float>(i, 0) = static_cast<float>(kpts1[i].pt.y);
-        kpts_mat1.at<float>(i, 1) = static_cast<float>(kpts1[i].pt.x);
+        kpts_mat1.at<float>(i, 0) = static_cast<float>(kpts1[i].pt.x);
+        kpts_mat1.at<float>(i, 1) = static_cast<float>(kpts1[i].pt.y);
         scores_mat1.at<float>(i) = static_cast<float>(kpts1[i].response);
     }
 
@@ -123,6 +123,12 @@ SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kp
     auto descriptors1 = torch::from_blob(desc1.data, {1, desc1.cols, desc1.rows}, torch::kFloat).to(device_);
     auto kpts0_t = normalizeKeypoints(kpts0_tensor);
     auto kpts1_t = normalizeKeypoints(kpts1_tensor);
+
+    // std::cout << descriptors0[0][0][0] << std::endl;
+    // std::cout << descriptors0[0][0][15] << std::endl;
+    // std::cout << descriptors1[0][0][0] << std::endl;
+    // std::cout << descriptors1[0][0][15] << std::endl;
+
     // #ifdef DEBUG
     //     std::cout << "kpts0_tensor:" << kpts0_tensor.sizes() << std::endl;
     //     std::cout << "kpts1_tensor:" << kpts1_tensor.sizes() << std::endl;
@@ -153,14 +159,18 @@ SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kp
     std::chrono::duration<double> elapsed_seconds = end - start;
     std::cout << "SuperpGlue module elapsed time: " << elapsed_seconds.count() << "s\n";
 #endif
+    std::cout << scores[0][0][0] << std::endl;
+    std::cout << scores[0][0][1] << std::endl;
     auto [values0, indices0] = scores.slice(1, 0, scores[0].size(0) - 1).slice(2, 0, scores[0].size(1) - 1).max(2);
     auto [values1, indices1] = scores.slice(1, 0, scores[0].size(0) - 1).slice(2, 0, scores[0].size(1) - 1).max(1);
 
     auto mutual0 = torch::arange(indices0.size(1)).unsqueeze(0).to(device_) == indices1.gather(1, indices0);
     auto mutual1 = torch::arange(indices1.size(1)).unsqueeze(0).to(device_) == indices0.gather(1, indices1);
+
     auto zero = torch::zeros(1).squeeze().to(device_);
     auto mscores0 = torch::where(mutual0, values0.exp(), zero);
     auto mscores1 = torch::where(mutual1, mscores0.gather(1, indices1), zero);
+
     auto valid0 = mutual0 & (mscores0 > match_threshold_);
     auto valid1 = mutual1 & valid0.gather(1, indices1);
 
@@ -197,16 +207,21 @@ SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kp
 
 torch::Tensor SuperGlue::normalizeKeypoints(torch::Tensor &kpts)
 {
-    auto one = torch::ones(1).to(kpts);
-    auto size = torch::stack({one * image_height_, one * image_width_}, 1);
+    auto one = torch::tensor(1).to(kpts);
+    // auto one = torch::ones(1).to(kpts);
+
+    auto size = torch::stack({one * image_width_, one * image_height_}, 0)
+                    .unsqueeze(0);
+
     auto center = size / 2;
-    auto scaling = std::get<1>(size.max(1, true)) * 1.7;
+    auto scaling = std::get<0>(size.max(1, true)) * 0.7;
+
     // #ifdef DEBUG
     //     std::cout << one.sizes() << std::endl;
     //     std::cout << size.sizes() << std::endl;
     //     std::cout << size << std::endl;
-    //     std::cout << std::get<0>(size.max(1, true)) << std::endl;
-    //     std::cout << std::get<1>(size.max(1, true)) << std::endl;
+    // std::cout << std::get<0>(size.max(1, true)) << std::endl;
+    // std::cout << std::get<1>(size.max(1, true)) << std::endl;
     // #endif
     return ((kpts - center) / scaling).unsqueeze_(0);
 }
