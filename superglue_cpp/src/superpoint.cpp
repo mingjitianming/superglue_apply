@@ -2,6 +2,7 @@
 #include "spdlog/spdlog.h"
 #include <chrono>
 
+
 SuperPoint::SuperPoint(const YAML::Node &config_node) : keypoint_threshold_(config_node["keypoint_threshold"].as<double>()),
                                                         remove_borders_(config_node["remove_borders"].as<int>()),
                                                         max_keypoints_(config_node["max_keypoints"].as<int>())
@@ -55,7 +56,7 @@ auto SuperPoint::calcKeyPoints(torch::Tensor &&score)
     // }
 
     auto [keypoints, scores] = removeBorders(keypts, keypts_score, remove_borders_, score[0].size(0), score[0].size(1));
-    // std::cout << keypoints.sizes() << std::endl;
+
     if (max_keypoints_ > 0 && keypoints.size(0) > max_keypoints_)
     {
         auto [ss, indices] = torch::topk(scores, max_keypoints_, 0);
@@ -101,10 +102,9 @@ std::pair<std::vector<cv::KeyPoint>, cv::Mat> SuperPoint::detect(const cv::Mat &
     std::cout << "superpoint module elapsed time: " << elapsed_seconds.count() << "s\n";
 #endif
     auto [keypoints, scores] = calcKeyPoints(std::move(out->elements()[0].toTensor()));
-    // std::cout << scores.sizes() << std::endl;
+
     auto descriptors = calcDescriptors(keypoints, std::move(out->elements()[1].toTensor())).to(torch::kCPU);
-    // std::cout << descriptors << std::endl;
-    // std::cout << descriptors.sizes() << std::endl;
+
     std::vector<cv::KeyPoint> kpts;
     kpts.reserve(keypoints.size(0));
     for (auto i = 0; i < keypoints.size(0); ++i)
@@ -113,8 +113,7 @@ std::pair<std::vector<cv::KeyPoint>, cv::Mat> SuperPoint::detect(const cv::Mat &
     }
     // XXX: desc_mat  [num_keypoints x 256]
     cv::Mat desc_mat(cv::Size(descriptors.size(0), descriptors.size(1)), CV_32FC1, descriptors.data_ptr<float>());
-    std::cout << "desc:"<<desc_mat.at<float>(0, 0) << std::endl;
-    // std::cout << desc_mat << std::endl;
+
     return std::make_pair(kpts, desc_mat.clone());
 }
 

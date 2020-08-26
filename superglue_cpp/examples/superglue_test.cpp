@@ -9,10 +9,10 @@ int main()
     const YAML::Node sp_node = YAML::LoadFile(workspace + "config/superpoint.yaml");
     const YAML::Node sg_node = YAML::LoadFile(workspace + "config/superglue.yaml");
     SuperPoint sp = SuperPoint(sp_node);
-    // cv::Mat img0 = cv::imread(workspace + "test/data/equirectangular_image_001.jpg", cv::IMREAD_GRAYSCALE);
-    // cv::Mat img1 = cv::imread(workspace + "test/data/equirectangular_image_002.jpg", cv::IMREAD_GRAYSCALE);
-    cv::Mat img0 = cv::imread(workspace + "test/data/t/1.png", cv::IMREAD_GRAYSCALE);
-    cv::Mat img1 = cv::imread(workspace + "test/data/t/2.png", cv::IMREAD_GRAYSCALE);
+    cv::Mat img0 = cv::imread(workspace + "test/data/equirectangular_image_001.jpg", cv::IMREAD_GRAYSCALE);
+    cv::Mat img1 = cv::imread(workspace + "test/data/equirectangular_image_002.jpg", cv::IMREAD_GRAYSCALE);
+    // cv::Mat img0 = cv::imread(workspace + "test/data/t/1.png", cv::IMREAD_GRAYSCALE);
+    // cv::Mat img1 = cv::imread(workspace + "test/data/t/2.png", cv::IMREAD_GRAYSCALE);
     cv::resize(img0, img0, cv::Size(640, 480), 0, 0);
     cv::resize(img1, img1, cv::Size(640, 480), 0, 0);
 
@@ -26,6 +26,7 @@ int main()
     // auto desc1 = temp1.second;
 
     SuperGlue sg = SuperGlue(sg_node);
+
     for (int i = 0; i < 10; ++i)
     {
 
@@ -43,24 +44,21 @@ int main()
 
         cv::Mat cat;
         cv::hconcat(img0, img1, cat);
-        cv::Mat cat_color = cv::Mat(cat.rows, cat.cols, CV_32FC3);
+        cv::Mat cat_color = cv::Mat(cat.rows, cat.cols, CV_8UC3);
         cv::cvtColor(cat, cat_color, CV_GRAY2BGR);
         for (int i = 0; i < kpts0.size(); ++i)
-        { 
+        {
             if (indice0[i] == -1)
                 continue;
 
             int color = scores0[i] * 255;
-            cv::line(cat_color, kpts0[i].pt, cv::Point(kpts1[indice0[i]].pt.x + img0.cols, kpts1[indice0[i]].pt.y), (0, 255, 0));
-            // if (std::get<0>(tempp)[i] == -1)
-            //     continue;
-            // auto kk = cv::Point(kpts1[std::get<0>(tempp)[i]].pt.x + img0.cols, kpts1[std::get<0>(tempp)[i]].pt.y);
-            // cv::line(cat_color, kpts0[i].pt, cv::Point(kpts1[std::get<0>(tempp)[i]].pt.x + img0.cols, kpts1[std::get<0>(tempp)[i]].pt.y), (255, 255, 255));
+            cv::line(cat_color, kpts0[i].pt, cv::Point(kpts1[indice0[i]].pt.x + img0.cols, kpts1[indice0[i]].pt.y), (255, color, 100));
         }
 
         cv::imshow("superpoint", cat_color);
-        cv::waitKey();
+        cv::waitKey(20);
     }
+
     std::cout << "finished!" << std::endl;
     return 0;
 }
