@@ -12,7 +12,7 @@ class SuperPoint
 {
 
 public:
-    SuperPoint(const YAML::Node &config_node);
+    explicit SuperPoint(const YAML::Node &config_node);
     ~SuperPoint() = default;
     std::pair<std::vector<cv::KeyPoint>, cv::Mat> detect(const cv::Mat &image);
     void computeDescriptors(const std::vector<cv::KeyPoint> &keypoints, cv::Mat &descriptors);

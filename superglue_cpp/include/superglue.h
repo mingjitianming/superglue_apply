@@ -6,13 +6,13 @@
 #include <opencv2/core/core.hpp>
 #include <torch/script.h> // One-stop header.
 #include <torch/torch.h>
-#include <yaml-cpp/yaml.h>
 #include <tuple>
+#include <yaml-cpp/yaml.h>
 
 class SuperGlue
 {
 public:
-    SuperGlue(const YAML::Node &glue_config);
+    explicit SuperGlue(const YAML::Node &glue_config);
     ~SuperGlue() = default;
     std::tuple<std::vector<int>, std::vector<float>, std::vector<int>, std::vector<float>>
     match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kpts1, cv::Mat &desc0, cv::Mat &desc1);
@@ -24,7 +24,7 @@ private:
      * @param kpts 
      * @return torch::Tensor 
      */
-    torch::Tensor normalizeKeypoints(torch::Tensor &kpts);
+    torch::Tensor normalizeKeypoints(torch::Tensor &kpts, int image_width, int image_height);
 
     /**
      * @brief """ Perform Sinkhorn Normalization in Log-space for stability"""
