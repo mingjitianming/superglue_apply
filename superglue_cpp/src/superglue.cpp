@@ -18,6 +18,9 @@ SuperGlue::SuperGlue(const YAML::Node &glue_config) : image_width_(glue_config["
         spdlog::warn("CUDA is not available!");
     }
     assert(weight_ == "outdoor" || weight_ == "indoor");
+    torch::jit::getProfilingMode() = false;
+    torch::jit::getExecutorMode() = false;
+    torch::jit::setGraphExecutorOptimize(false);
     if (weight_ == "indoor")
     {
         module_ = std::make_shared<torch::jit::script::Module>(
@@ -27,7 +30,6 @@ SuperGlue::SuperGlue(const YAML::Node &glue_config) : image_width_(glue_config["
                 device_));
         spdlog::info("Loaded SuperGlue model ('indoor' weights)");
     }
-
     else
     {
         module_ = std::make_shared<torch::jit::script::Module>(
@@ -50,8 +52,6 @@ auto SuperGlue::logSinkhornIterations(torch::Tensor &Z, torch::Tensor &log_mu, t
         u = log_mu - torch::logsumexp(Z + v.unsqueeze(1), 2);
         v = log_nu - torch::logsumexp(Z + u.unsqueeze(2), 1);
     }
-    // std::cout << u << std::endl;
-    // std::cout << v << std::endl;
     return Z + u.unsqueeze(2) + v.unsqueeze(1);
 }
 
@@ -66,7 +66,6 @@ auto SuperGlue::logOptimalTransport(const torch::Tensor &&scores, torch::Tensor 
 
     auto bins0 = alpha.expand({b, m, 1});
     auto bins1 = alpha.expand({b, 1, n});
-    // std::cout << scores << std::endl;
     alpha = alpha.expand({b, 1, 1});
     auto couplings = torch::cat({torch::cat({scores, bins0}, -1),
                                  torch::cat({bins1, alpha}, -1)},
@@ -76,7 +75,6 @@ auto SuperGlue::logOptimalTransport(const torch::Tensor &&scores, torch::Tensor 
     auto log_nu = torch::cat({norm.expand(n), ms.log().unsqueeze_(0) + norm});
     log_mu = log_mu.unsqueeze(0).expand({b, -1});
     log_nu = log_nu.unsqueeze(0).expand({b, -1});
-    // std::cout << couplings << std::endl;
     auto Z = logSinkhornIterations(couplings, log_mu, log_nu, iters);
     Z = Z - norm;
     return Z;
@@ -95,7 +93,7 @@ SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kp
     cv::Mat kpts_mat1(kpts1.size(), 2, CV_32F); // [n_keypoints, 2]  (y, x)
     cv::Mat scores_mat0(kpts0.size(), 1, CV_32F);
     cv::Mat scores_mat1(kpts1.size(), 1, CV_32F);
-    // std::cout << desc0.at<float>(0, 0) << std::endl;
+
 #ifdef USE_OPENMP
 #pragma omp parallel for
 #endif
@@ -121,13 +119,8 @@ SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kp
     auto scores1_tensor = torch::from_blob(scores_mat1.data, {1, static_cast<long>(kpts1.size())}, torch::kFloat).to(device_);
     auto descriptors0 = torch::from_blob(desc0.data, {1, desc0.cols, desc0.rows}, torch::kFloat).to(device_);
     auto descriptors1 = torch::from_blob(desc1.data, {1, desc1.cols, desc1.rows}, torch::kFloat).to(device_);
-    auto kpts0_t = normalizeKeypoints(kpts0_tensor);
-    auto kpts1_t = normalizeKeypoints(kpts1_tensor);
-
-    // std::cout << descriptors0[0][0][0] << std::endl;
-    // std::cout << descriptors0[0][0][15] << std::endl;
-    // std::cout << descriptors1[0][0][0] << std::endl;
-    // std::cout << descriptors1[0][0][15] << std::endl;
+    auto kpts0_t = normalizeKeypoints(kpts0_tensor, image_width_, image_height_);
+    auto kpts1_t = normalizeKeypoints(kpts1_tensor, image_width_, image_height_);
 
     // #ifdef DEBUG
     //     std::cout << "kpts0_tensor:" << kpts0_tensor.sizes() << std::endl;
@@ -146,8 +139,9 @@ SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kp
     data.insert("keypoints1", kpts1_t);
     data.insert("scores0", scores0_tensor);
     data.insert("scores1", scores1_tensor);
-    data.insert("descriptors0", scores0_tensor);
-    data.insert("descriptors1", scores1_tensor);
+    data.insert("descriptors0", descriptors0);
+    data.insert("descriptors1", descriptors1);
+
 #ifdef DEBUG
     auto start = std::chrono::steady_clock::now();
 #endif
@@ -159,8 +153,7 @@ SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kp
     std::chrono::duration<double> elapsed_seconds = end - start;
     std::cout << "SuperpGlue module elapsed time: " << elapsed_seconds.count() << "s\n";
 #endif
-    std::cout << scores[0][0][0] << std::endl;
-    std::cout << scores[0][0][1] << std::endl;
+
     auto [values0, indices0] = scores.slice(1, 0, scores[0].size(0) - 1).slice(2, 0, scores[0].size(1) - 1).max(2);
     auto [values1, indices1] = scores.slice(1, 0, scores[0].size(0) - 1).slice(2, 0, scores[0].size(1) - 1).max(1);
 
@@ -205,12 +198,11 @@ SuperGlue::match(std::vector<cv::KeyPoint> &kpts0, std::vector<cv::KeyPoint> &kp
     return std::make_tuple(key_indices0, point_scores0, key_indices1, point_scores1);
 }
 
-torch::Tensor SuperGlue::normalizeKeypoints(torch::Tensor &kpts)
+torch::Tensor SuperGlue::normalizeKeypoints(torch::Tensor &kpts, int image_width, int image_height)
 {
     auto one = torch::tensor(1).to(kpts);
-    // auto one = torch::ones(1).to(kpts);
 
-    auto size = torch::stack({one * image_width_, one * image_height_}, 0)
+    auto size = torch::stack({one * image_width, one * image_height}, 0)
                     .unsqueeze(0);
 
     auto center = size / 2;
