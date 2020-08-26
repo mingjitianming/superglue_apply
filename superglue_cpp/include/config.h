@@ -4,6 +4,7 @@
 
 #define WORKSPACE_DIR "/home/zmy/project_ws/superglue_apply/superglue_cpp/"
 
-std::string workspace = WORKSPACE_DIR;
+// const std::string workspace = WORKSPACE_DIR;
+static const std::string workspace = WORKSPACE_DIR;
 
 #endif
