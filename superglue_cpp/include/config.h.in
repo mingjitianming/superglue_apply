@@ -4,7 +4,6 @@
 
 #define WORKSPACE_DIR "@WORKSPACE_DIR@/"
 
-// const std::string workspace = WORKSPACE_DIR;
 static const std::string workspace = WORKSPACE_DIR;
 
 #endif
