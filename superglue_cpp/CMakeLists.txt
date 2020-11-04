@@ -24,11 +24,15 @@ else()
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# add_compile_options(-fPIC)
+
 # set workspace path
 set(WORKSPACE_DIR ${PROJECT_SOURCE_DIR})
 configure_file("${PROJECT_SOURCE_DIR}/include/config.h.in" "${PROJECT_SOURCE_DIR}/include/config.h")
 
 list(APPEND CMAKE_PREFIX_PATH ${PROJECT_SOURCE_DIR}/3rd/libtorch)
+
+set(CMAKE_INSTALL_PREFIX ${PROJECT_BINARY_DIR}/install)
 
 #----- find package ------
 find_package(Torch REQUIRED)
@@ -47,34 +51,88 @@ else()
     message(STATUS "OpenMP: DISABLED")
 endif()
 
-include_directories(include
-                    ${TORCH_INCLUDE_DIRS}
-                    ${OpenCV_INCLUDE_DIRS}
-                    ${PROJECT_SOURCE_DIR}/3rd/spdlog/include)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 message(STATUS "Library out path:" ${PROJECT_BINARY_DIR}/lib)
 add_library(superpoint SHARED
     src/superpoint.cpp
 )
+
+target_include_directories(superpoint
+                           PUBLIC
+                           $<BUILD_INTERFACE: include>
+                           $<BUILD_INTERFACE: ${TORCH_INCLUDE_DIRS}>
+                           $<BUILD_INTERFACE: ${OpenCV_INCLUDE_DIRS}>
+                           $<BUILD_INTERFACE: ${PROJECT_SOURCE_DIR}/3rd/spdlog/include>
+                        #   $<INSTALL_INTERFACE:include>
+                        #   $<INSTALL_INTERFACE:${OpenCV_INCLUDE_DIRS}>
+                        #    $<INSTALL_INTERFACE:${TORCH_INCLUDE_DIRS}>
+                        #    $<BUILD_INTERFACE: include/spdlog/include>
+                           )
+
 # set_target_properties(superpoint PROPERTIES
-#                       OUTPUT_NAME superpoint
-#                       LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
+#                       PUBLIC_HEADER ${HEADERS}
+#                     #   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib
+#                       )
 
 target_link_libraries(superpoint 
-                INTERFACE
+                PUBLIC
                 ${TORCH_LIBRARIES}
                 ${OpenCV_LIBS}
                 yaml-cpp
                 )
-
+set_target_properties(superpoint
+            PROPERTIES
+                POSITION_INDEPENDENT_CODE 1
+                SKIP_BUILD_RPATH OFF
+                BUILD_WITH_INSTALL_RPATH OFF
+                BUILD_RPATH "../../3rd/libtorch/lib"
+                INSTALL_RPATH_USE_LINK_PATH ON     )
 add_library(superglue SHARED
     src/superglue.cpp
 )
+
+target_include_directories(superglue
+                           PUBLIC
+                           $<BUILD_INTERFACE: include>
+                           $<BUILD_INTERFACE: ${TORCH_INCLUDE_DIRS}>
+                           $<BUILD_INTERFACE: ${OpenCV_INCLUDE_DIRS}>
+                           $<BUILD_INTERFACE: ${PROJECT_SOURCE_DIR}/3rd/spdlog/include>
+                        #    $<INSTALL_INTERFACE:include>
+                           )
+
+
 target_link_libraries(superglue 
                      INTERFACE
                      ${TORCH_LIBRARIES}
                      ${OpenCV_LIBS}
                      yaml-cpp)
 
+set_target_properties(superglue
+            PROPERTIES
+                POSITION_INDEPENDENT_CODE 1
+                SKIP_BUILD_RPATH OFF
+                BUILD_WITH_INSTALL_RPATH OFF
+                BUILD_RPATH "../../3rd/libtorch/lib"
+                INSTALL_RPATH_USE_LINK_PATH ON     )                    
+
 add_subdirectory(examples)
+
+export(TARGETS superpoint superglue
+       FILE  cmake/superglueConfig.cmake)
+
+
+# set(CMAKE_EXPORT_PACKAGE_REGISTRY ON)
+# export(PACKAGE superpoint)
+# message(STATUS ${EXPORT_LIB_INC_DIR})
+
+# install(TARGETS superpoint
+#         EXPORT superpointTargets
+#         LIBRARY DESTINATION lib
+#         )
+# file(GLOB HEADERS ${PROJECT_SOURCE_DIR}/include/*.h)
+# install(FILES ${HEADERS} DESTINATION include)
+
+# install(EXPORT superpointTargets
+#         FILE superpointTargets.cmake
+#         DESTINATION lib/cmake/superpoint)   
