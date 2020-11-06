@@ -45,7 +45,12 @@ int main()
         cv::Mat cat;
         cv::hconcat(img0, img1, cat);
         cv::Mat cat_color = cv::Mat(cat.rows, cat.cols, CV_8UC3);
+#if (CV_VERSION_MAJOR >= 4)
+        cv::cvtColor(cat, cat_color, cv::COLOR_GRAY2BGR);
+#else
         cv::cvtColor(cat, cat_color, CV_GRAY2BGR);
+#endif
+
         for (int i = 0; i < kpts0.size(); ++i)
         {
             if (indice0[i] == -1)
