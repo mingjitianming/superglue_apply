@@ -64,9 +64,14 @@ else()
     message(STATUS "OpenMP: DISABLED")
 endif()
 
-add_library(superpoint SHARED
-    src/superpoint.cpp
+add_library(superpoint SHARED ""
+    # src/superpoint.cpp
 )
+
+target_sources(superpoint
+  PRIVATE
+    src/superpoint.cpp
+  )
 
 
 # list(APPEND TORCH_INSTALL_INCLUDE_DIRS)
@@ -192,4 +197,5 @@ install(
 #
 #################################################################
 
+include(${PROJECT_SOURCE_DIR}/cmake/CMakeCPack.cmake)
 
